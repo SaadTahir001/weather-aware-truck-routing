@@ -222,15 +222,15 @@ class MapboxClient:
                 f"Mapbox directions failed: {payload.get('code', 'unknown error')}."
             )
         route_payloads = payload.get("routes") or []
-        if len(route_payloads) < 3:
+        if len(route_payloads) < 1:
             raise InsufficientRoutesError(
-                "The routing provider found fewer than three distinct routes."
+                "No valid routes found."
             )
 
         response_id = str(payload.get("uuid") or "mapbox")
         return tuple(
             self._parse_route(item, f"{response_id}-{index + 1}")
-            for index, item in enumerate(route_payloads[:3])
+            for index, item in enumerate(route_payloads[:3]) # Slicing [:3] safely handles 1, 2, or 3 routes
         )
 
     def _parse_route(self, payload: dict[str, Any], route_id: str) -> ProviderRoute:
