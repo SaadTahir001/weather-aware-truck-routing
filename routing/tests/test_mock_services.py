@@ -50,6 +50,17 @@ class MockRoutePlanningTests(TestCase):
             )
         )
         first_timeline = result["routes"][0]["checkpoints"][0]["forecast_timeline"]
+        self.assertEqual(
+            [entry["hour_offset"] for entry in first_timeline],
+            list(range(49)),
+        )
+        self.assertTrue(
+            all(
+                set(entry) == {"hour_offset", "weather", "risk"}
+                and isinstance(entry["hour_offset"], int)
+                for entry in first_timeline
+            )
+        )
         self.assertNotEqual(
             first_timeline[0]["weather"]["forecast_time"],
             first_timeline[1]["weather"]["forecast_time"],

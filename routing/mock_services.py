@@ -20,6 +20,7 @@ from .route_planning import (
     EnrichedRoute,
     RoutePlanningService,
     RouteSizeLimitError,
+    normalize_weather_timeline,
     sample_route,
 )
 from .services import CheckpointInput, RiskLevel, RouteInput, recommend_best_route
@@ -152,18 +153,21 @@ class MockRoutePlanningService:
                     checkpoint_index=checkpoint_index,
                 )
                 weather_readings.append(weather)
-                timeline = tuple(
-                    _mock_weather(
-                        _pattern_risk(
-                            route_index,
-                            (progress + (hour_offset / 48) * 0.55) % 1.0,
-                        ),
-                        departure_time + timedelta(hours=hour_offset),
-                        route_index=route_index,
-                        checkpoint_index=checkpoint_index,
-                        hour_offset=hour_offset,
-                    )
-                    for hour_offset in range(49)
+                timeline = normalize_weather_timeline(
+                    tuple(
+                        _mock_weather(
+                            _pattern_risk(
+                                route_index,
+                                (progress + (hour_offset / 48) * 0.55) % 1.0,
+                            ),
+                            departure_time + timedelta(hours=hour_offset),
+                            route_index=route_index,
+                            checkpoint_index=checkpoint_index,
+                            hour_offset=hour_offset,
+                        )
+                        for hour_offset in range(49)
+                    ),
+                    departure_time,
                 )
                 weather_timelines.append(timeline)
                 risk_checkpoints.append(

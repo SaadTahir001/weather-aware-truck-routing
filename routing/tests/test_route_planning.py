@@ -7,7 +7,11 @@ from routing.external_services import (
     ProviderRoute,
     WeatherReading,
 )
-from routing.route_planning import METERS_PER_MILE, RoutePlanningService
+from routing.route_planning import (
+    METERS_PER_MILE,
+    RoutePlanningService,
+    normalize_weather_timeline,
+)
 
 
 class FakeRoutingClient:
@@ -68,6 +72,21 @@ class FakeWeatherClient:
 
 
 class RoutePlanningTests(TestCase):
+    def test_normalizes_short_out_of_order_live_timeline_to_49_entries(self) -> None:
+        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        later = FakeWeatherClient().forecast_at(
+            Coordinate(0, 0),
+            start + timedelta(hours=2),
+        )
+        earlier = FakeWeatherClient().forecast_at(Coordinate(0, 0), start)
+
+        result = normalize_weather_timeline((later, earlier), start)
+
+        self.assertEqual(len(result), 49)
+        self.assertEqual(result[0].forecast_time, start)
+        self.assertEqual(result[2].forecast_time, start + timedelta(hours=2))
+        self.assertEqual(result[-1].forecast_time, start + timedelta(hours=2))
+
     def test_builds_frontend_payload_and_recommends_lowest_risk_route(self) -> None:
         service = RoutePlanningService(
             routing_client=FakeRoutingClient(),
@@ -92,7 +111,16 @@ class RoutePlanningTests(TestCase):
         self.assertEqual(result["routes"][0]["decision"]["status"], "not_recommended")
         self.assertEqual(result["routes"][0]["geometry"]["type"], "LineString")
         self.assertEqual(len(result["routes"][0]["checkpoints"]), 3)
+        timeline = result["routes"][0]["checkpoints"][0]["forecast_timeline"]
+        self.assertEqual(len(timeline), 49)
         self.assertEqual(
-            len(result["routes"][0]["checkpoints"][0]["forecast_timeline"]),
-            49,
+            [entry["hour_offset"] for entry in timeline],
+            list(range(49)),
+        )
+        self.assertTrue(
+            all(
+                set(entry) == {"hour_offset", "weather", "risk"}
+                and isinstance(entry["hour_offset"], int)
+                for entry in timeline
+            )
         )

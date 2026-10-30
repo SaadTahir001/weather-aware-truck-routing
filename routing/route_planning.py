@@ -136,6 +136,10 @@ class RoutePlanningService:
                         departure_time,
                         hours=48,
                     )
+                    timeline = normalize_weather_timeline(
+                        timeline,
+                        departure_time,
+                    )
                     weather_timeline_cache[cache_key] = timeline
                 weather = min(
                     timeline,
@@ -375,6 +379,30 @@ def sample_route(
             )
         )
     return tuple(samples)
+
+
+def normalize_weather_timeline(
+    readings: tuple[WeatherReading, ...],
+    start_time: datetime,
+    hours: int = 48,
+) -> tuple[WeatherReading, ...]:
+    """Normalize provider data to ordered offsets 0..hours, clamping as needed."""
+
+    if not readings:
+        raise ValueError("A weather timeline must contain at least one reading.")
+    ordered = tuple(sorted(readings, key=lambda reading: reading.forecast_time))
+    return tuple(
+        min(
+            ordered,
+            key=lambda reading: abs(
+                (
+                    reading.forecast_time
+                    - (start_time + timedelta(hours=hour_offset))
+                ).total_seconds()
+            ),
+        )
+        for hour_offset in range(hours + 1)
+    )
 
 
 def _decision(
