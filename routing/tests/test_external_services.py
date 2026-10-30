@@ -1,5 +1,5 @@
 from io import BytesIO
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest import TestCase
 from unittest.mock import patch
 from urllib.error import HTTPError
@@ -140,6 +140,73 @@ class ProviderParsingTests(TestCase):
         self.assertEqual(result.wind_mph, 30)
         self.assertEqual(http.calls[0][1], "OpenWeather")
         self.assertEqual(http.calls[0][2]["units"], "imperial")
+
+    def test_openweather_clamps_eta_to_closest_available_forecast(self) -> None:
+        first_time = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        final_time = first_time + timedelta(hours=1)
+        http = FakeHttpClient(
+            {
+                "hourly": [
+                    {
+                        "dt": int(first_time.timestamp()),
+                        "wind_speed": 10,
+                        "temp": 40,
+                        "weather": [{"description": "early"}],
+                    },
+                    {
+                        "dt": int(final_time.timestamp()),
+                        "wind_speed": 20,
+                        "temp": 50,
+                        "weather": [{"description": "final"}],
+                    },
+                ]
+            }
+        )
+        client = OpenWeatherClient(
+            api_key="secret",
+            max_forecast_gap_seconds=1,
+            http_client=http,
+        )
+
+        before_window = client.forecast_at(
+            Coordinate(0, 0),
+            first_time - timedelta(days=2),
+        )
+        after_window = client.forecast_at(
+            Coordinate(0, 0),
+            final_time + timedelta(days=2),
+        )
+
+        self.assertEqual(before_window.forecast_time, first_time)
+        self.assertEqual(before_window.description, "early")
+        self.assertEqual(after_window.forecast_time, final_time)
+        self.assertEqual(after_window.description, "final")
+
+    def test_openweather_timeline_always_contains_49_clamped_entries(self) -> None:
+        available_time = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        http = FakeHttpClient(
+            {
+                "hourly": [
+                    {
+                        "dt": int(available_time.timestamp()),
+                        "wind_speed": 15,
+                        "temp": 45,
+                        "weather": [{"description": "available"}],
+                    }
+                ]
+            }
+        )
+        client = OpenWeatherClient(api_key="secret", http_client=http)
+
+        timeline = client.forecast_timeline(
+            Coordinate(0, 0),
+            available_time + timedelta(days=5),
+        )
+
+        self.assertEqual(len(timeline), 49)
+        self.assertTrue(
+            all(reading.forecast_time == available_time for reading in timeline)
+        )
 
 
 class ProviderAccessErrorTests(TestCase):

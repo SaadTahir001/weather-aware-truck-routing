@@ -143,11 +143,6 @@ class RoutePlanningService:
                         (reading.forecast_time - checkpoint.eta).total_seconds()
                     ),
                 )
-                if abs((weather.forecast_time - checkpoint.eta).total_seconds()) > 5_400:
-                    weather = self.weather_client.forecast_at(
-                        checkpoint.coordinate,
-                        checkpoint.eta,
-                    )
                 weather_readings.append(weather)
                 weather_timelines.append(timeline)
                 risk_checkpoints.append(

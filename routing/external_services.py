@@ -400,17 +400,25 @@ class OpenWeatherClient:
         eta: datetime,
     ) -> WeatherReading:
         target_timestamp = eta.timestamp()
-        try:
-            closest = min(hourly, key=lambda item: abs(float(item["dt"]) - target_timestamp))
-            forecast_timestamp = float(closest["dt"])
-        except (KeyError, TypeError, ValueError) as exc:
+        candidates: list[tuple[float, dict[str, Any]]] = []
+        for item in hourly:
+            if not isinstance(item, dict):
+                continue
+            try:
+                candidates.append((float(item["dt"]), item))
+            except (KeyError, TypeError, ValueError):
+                continue
+        if not candidates:
             raise ExternalServiceError(
-                "OpenWeather returned invalid hourly forecast data."
-            ) from exc
-        if abs(forecast_timestamp - target_timestamp) > self.max_forecast_gap_seconds:
-            raise ForecastUnavailableError(
-                f"No hourly weather forecast is available near ETA {eta.isoformat()}."
+                "OpenWeather returned no usable hourly forecast timestamps."
             )
+
+        # min() naturally clamps ETAs outside the provider window to its first
+        # or final reading, and selects the nearest hour when no exact match exists.
+        forecast_timestamp, closest = min(
+            candidates,
+            key=lambda candidate: abs(candidate[0] - target_timestamp),
+        )
 
         try:
             weather_items = closest.get("weather") or []
