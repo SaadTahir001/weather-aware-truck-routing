@@ -26,13 +26,24 @@ class FakeHttpClient:
 
 
 class ProviderParsingTests(TestCase):
-    def test_mapbox_requests_and_parses_three_routes(self) -> None:
-        route = {
+    @staticmethod
+    def route_payload(distance=1_000, duration=100):
+        return {
             "geometry": {"coordinates": [[0, 0], [1, 1]]},
-            "distance": 1_000,
-            "duration": 100,
-            "legs": [{"annotation": {"distance": [1_000], "duration": [100]}}],
+            "distance": distance,
+            "duration": duration,
+            "legs": [
+                {
+                    "annotation": {
+                        "distance": [distance],
+                        "duration": [duration],
+                    }
+                }
+            ],
         }
+
+    def test_mapbox_requests_and_parses_three_routes(self) -> None:
+        route = self.route_payload()
         http = FakeHttpClient({"code": "Ok", "uuid": "abc", "routes": [route] * 3})
         client = MapboxClient(access_token="secret", http_client=http)
 
@@ -47,6 +58,62 @@ class ProviderParsingTests(TestCase):
         self.assertEqual(http.calls[0][1], "Mapbox")
         self.assertEqual(http.calls[0][2]["alternatives"], "true")
         self.assertEqual(http.calls[0][2]["geometries"], "geojson")
+
+    def test_mapbox_synthesizes_third_route_from_second_route(self) -> None:
+        http = FakeHttpClient(
+            {
+                "code": "Ok",
+                "uuid": "abc",
+                "routes": [
+                    self.route_payload(distance=1_000, duration=100),
+                    self.route_payload(distance=1_200, duration=120),
+                ],
+            }
+        )
+        client = MapboxClient(access_token="secret", http_client=http)
+
+        result = client.get_route_options(
+            Coordinate(0, 0),
+            Coordinate(1, 1),
+            datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+
+        self.assertEqual(len(result), 3)
+        self.assertEqual(result[2].route_id, "abc-2-alt3")
+        self.assertEqual(result[2].geometry, result[1].geometry)
+        self.assertAlmostEqual(result[2].distance_meters, 1_260)
+        self.assertAlmostEqual(result[2].duration_seconds, 126)
+        self.assertAlmostEqual(
+            sum(result[2].segment_distances_meters),
+            result[2].distance_meters,
+        )
+        self.assertAlmostEqual(
+            sum(result[2].segment_durations_seconds),
+            result[2].duration_seconds,
+        )
+
+    def test_mapbox_synthesizes_two_routes_from_single_route(self) -> None:
+        route = self.route_payload(distance=1_000, duration=100)
+        http = FakeHttpClient({"code": "Ok", "uuid": "abc", "routes": [route]})
+        client = MapboxClient(access_token="secret", http_client=http)
+
+        result = client.get_route_options(
+            Coordinate(0, 0),
+            Coordinate(1, 1),
+            datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+
+        self.assertEqual(len(result), 3)
+        self.assertEqual(
+            [item.route_id for item in result],
+            ["abc-1", "abc-1-alt2", "abc-1-alt3"],
+        )
+        self.assertEqual(result[1].geometry, result[0].geometry)
+        self.assertEqual(result[2].geometry, result[0].geometry)
+        self.assertAlmostEqual(result[1].distance_meters, 1_050)
+        self.assertAlmostEqual(result[1].duration_seconds, 105)
+        self.assertAlmostEqual(result[2].distance_meters, 1_100)
+        self.assertAlmostEqual(result[2].duration_seconds, 110)
 
     def test_openweather_converts_mm_per_hour_to_inches(self) -> None:
         eta = datetime(2026, 1, 1, tzinfo=timezone.utc)

@@ -77,6 +77,10 @@ class RoutePlanningTests(TestCase):
         )
 
         self.assertEqual(len(result["routes"]), 3)
+        self.assertEqual(
+            [route["name"] for route in result["routes"]],
+            ["Route 1", "Route 2", "Route 3"],
+        )
         self.assertEqual(result["recommended_route_id"], "route-3")
         self.assertEqual(result["routes"][2]["decision"]["status"], "recommended")
         self.assertEqual(result["routes"][0]["decision"]["status"], "not_recommended")

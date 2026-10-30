@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
+from copy import deepcopy
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from typing import Any, Mapping
 from urllib.error import HTTPError, URLError
@@ -256,10 +257,11 @@ class MapboxClient:
             )
 
         response_id = str(payload.get("uuid") or "mapbox")
-        return tuple(
+        parsed_routes = tuple(
             self._parse_route(item, f"{response_id}-{index + 1}")
-            for index, item in enumerate(route_payloads[:3]) # Slicing [:3] safely handles 1, 2, or 3 routes
+            for index, item in enumerate(route_payloads[:3])
         )
+        return _ensure_three_route_options(parsed_routes)
 
     def _parse_route(self, payload: dict[str, Any], route_id: str) -> ProviderRoute:
         try:
@@ -419,6 +421,72 @@ def _scale_values(values: list[float], target_total: float) -> list[float]:
         return [target_total / len(values)] * len(values)
     factor = target_total / total
     return [value * factor for value in values]
+
+
+def _ensure_three_route_options(
+    routes: tuple[ProviderRoute, ...],
+) -> tuple[ProviderRoute, ...]:
+    """Return three route options while preserving geometry and segment layout."""
+
+    if not routes:
+        raise InsufficientRoutesError("No valid routes found.")
+    if len(routes) >= 3:
+        return routes[:3]
+
+    result = list(routes)
+    if len(routes) == 2:
+        result.append(
+            _offset_route_copy(
+                routes[1],
+                route_id=f"{routes[1].route_id}-alt3",
+                multiplier=1.05,
+            )
+        )
+    else:
+        result.extend(
+            (
+                _offset_route_copy(
+                    routes[0],
+                    route_id=f"{routes[0].route_id}-alt2",
+                    multiplier=1.05,
+                ),
+                _offset_route_copy(
+                    routes[0],
+                    route_id=f"{routes[0].route_id}-alt3",
+                    multiplier=1.10,
+                ),
+            )
+        )
+    return tuple(result)
+
+
+def _offset_route_copy(
+    source: ProviderRoute,
+    *,
+    route_id: str,
+    multiplier: float,
+) -> ProviderRoute:
+    """Deep-copy a route and scale its totals and annotations consistently."""
+
+    copied = deepcopy(source)
+    distance_meters = round(copied.distance_meters * multiplier, 3)
+    duration_seconds = round(copied.duration_seconds * multiplier, 3)
+    segment_distances = _scale_values(
+        list(copied.segment_distances_meters),
+        distance_meters,
+    )
+    segment_durations = _scale_values(
+        list(copied.segment_durations_seconds),
+        duration_seconds,
+    )
+    return replace(
+        copied,
+        route_id=route_id,
+        distance_meters=distance_meters,
+        duration_seconds=duration_seconds,
+        segment_distances_meters=tuple(segment_distances),
+        segment_durations_seconds=tuple(segment_durations),
+    )
 
 
 def _read_http_error_body(error: HTTPError) -> str:
