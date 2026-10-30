@@ -11,6 +11,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+from django.conf import settings
+
 
 MM_PER_INCH = 25.4
 
@@ -19,8 +21,23 @@ class ExternalServiceError(RuntimeError):
     """A provider request failed or returned an invalid response."""
 
 
-class ProviderAuthenticationError(ExternalServiceError):
-    """A provider explicitly rejected its API credential."""
+class ProviderAccessError(ExternalServiceError):
+    """A provider denied access and returned an authentication error body."""
+
+    def __init__(
+        self,
+        *,
+        provider: str,
+        status_code: int,
+        raw_response_body: str,
+    ) -> None:
+        self.provider = provider
+        self.status_code = status_code
+        self.raw_response_body = raw_response_body
+        self.detail = _provider_error_detail(raw_response_body)
+        super().__init__(
+            f"{provider} returned HTTP {status_code}: {self.detail}"
+        )
 
 
 class ConfigurationError(RuntimeError):
@@ -79,6 +96,7 @@ class JsonHttpClient:
         self,
         url: str,
         *,
+        provider: str,
         params: Mapping[str, Any],
         timeout_seconds: float,
     ) -> dict[str, Any]:
@@ -91,22 +109,32 @@ class JsonHttpClient:
             with urlopen(request, timeout=timeout_seconds) as response:
                 payload = response.read()
         except HTTPError as exc:
+            raw_response_body = _read_http_error_body(exc)
             if exc.code in {401, 403}:
-                raise ProviderAuthenticationError(
-                    "A routing or weather provider rejected its API credential."
+                raise ProviderAccessError(
+                    provider=provider,
+                    status_code=exc.code,
+                    raw_response_body=raw_response_body,
                 ) from exc
             raise ExternalServiceError(
-                f"Provider returned HTTP {exc.code}."
+                f"{provider} returned HTTP {exc.code}: "
+                f"{_provider_error_detail(raw_response_body)}"
             ) from exc
         except (URLError, TimeoutError) as exc:
-            raise ExternalServiceError("Provider request failed or timed out.") from exc
+            raise ExternalServiceError(
+                f"{provider} request failed or timed out."
+            ) from exc
 
         try:
             decoded = json.loads(payload)
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise ExternalServiceError("Provider returned invalid JSON.") from exc
+            raise ExternalServiceError(
+                f"{provider} returned invalid JSON."
+            ) from exc
         if not isinstance(decoded, dict):
-            raise ExternalServiceError("Provider returned an unexpected JSON shape.")
+            raise ExternalServiceError(
+                f"{provider} returned an unexpected JSON shape."
+            )
         return decoded
 
 
@@ -136,11 +164,7 @@ class MapboxClient:
     @classmethod
     def from_env(cls) -> "MapboxClient":
         return cls(
-            access_token=(
-                os.getenv("MAPBOX_ACCESS_TOKEN")
-                or os.getenv("MAPBOX_API_KEY")
-                or ""
-            ),
+            access_token=settings.MAPBOX_ACCESS_TOKEN,
             base_url=os.getenv("MAPBOX_API_BASE_URL", "https://api.mapbox.com"),
             profile=os.getenv(
                 "MAPBOX_DIRECTIONS_PROFILE", "mapbox/driving-traffic"
@@ -151,6 +175,7 @@ class MapboxClient:
     def geocode(self, query: str) -> GeocodedLocation:
         payload = self.http.get_json(
             f"{self.base_url}{self.GEOCODING_PATH}",
+            provider="Mapbox",
             params={
                 "q": query,
                 "access_token": self.access_token,
@@ -205,6 +230,7 @@ class MapboxClient:
 
         payload = self.http.get_json(
             f"{self.base_url}{self.DIRECTIONS_PATH}/{self.profile}/{coordinate_path}",
+            provider="Mapbox",
             params=params,
             timeout_seconds=self.timeout_seconds,
         )
@@ -215,8 +241,10 @@ class MapboxClient:
                 "Unauthorized",
                 "Forbidden",
             }:
-                raise ProviderAuthenticationError(
-                    "Mapbox rejected its API credential."
+                raise ProviderAccessError(
+                    provider="Mapbox",
+                    status_code=401,
+                    raw_response_body=json.dumps(payload),
                 )
             raise ExternalServiceError(
                 f"Mapbox directions failed: {payload.get('code', 'unknown error')}."
@@ -306,7 +334,7 @@ class OpenWeatherClient:
     @classmethod
     def from_env(cls) -> "OpenWeatherClient":
         return cls(
-            api_key=os.getenv("OPENWEATHER_API_KEY", ""),
+            api_key=settings.OPENWEATHER_API_KEY,
             base_url=os.getenv(
                 "OPENWEATHER_API_BASE_URL", "https://api.openweathermap.org"
             ),
@@ -323,6 +351,7 @@ class OpenWeatherClient:
     ) -> WeatherReading:
         payload = self.http.get_json(
             f"{self.base_url}{self.ONE_CALL_PATH}",
+            provider="OpenWeather",
             params={
                 "lat": coordinate.latitude,
                 "lon": coordinate.longitude,
@@ -332,6 +361,13 @@ class OpenWeatherClient:
             },
             timeout_seconds=self.timeout_seconds,
         )
+        response_code = str(payload.get("cod", ""))
+        if response_code in {"401", "403"}:
+            raise ProviderAccessError(
+                provider="OpenWeather",
+                status_code=int(response_code),
+                raw_response_body=json.dumps(payload),
+            )
         hourly = payload.get("hourly") or []
         if not hourly:
             raise ForecastUnavailableError(
@@ -383,6 +419,31 @@ def _scale_values(values: list[float], target_total: float) -> list[float]:
         return [target_total / len(values)] * len(values)
     factor = target_total / total
     return [value * factor for value in values]
+
+
+def _read_http_error_body(error: HTTPError) -> str:
+    try:
+        payload = error.read()
+    except (OSError, ValueError):
+        return ""
+    if isinstance(payload, bytes):
+        return payload.decode("utf-8", errors="replace").strip()
+    return str(payload).strip()
+
+
+def _provider_error_detail(raw_response_body: str) -> str:
+    if not raw_response_body:
+        return "No error response body was provided."
+    try:
+        decoded = json.loads(raw_response_body)
+    except json.JSONDecodeError:
+        return raw_response_body[:1_000]
+    if isinstance(decoded, dict):
+        for key in ("message", "error", "detail"):
+            value = decoded.get(key)
+            if value:
+                return str(value)[:1_000]
+    return raw_response_body[:1_000]
 
 
 def _haversine_meters(start: Coordinate, end: Coordinate) -> float:

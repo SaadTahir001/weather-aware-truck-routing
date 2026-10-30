@@ -1,10 +1,15 @@
+from io import BytesIO
 from datetime import datetime, timezone
 from unittest import TestCase
+from unittest.mock import patch
+from urllib.error import HTTPError
 
 from routing.external_services import (
     Coordinate,
+    JsonHttpClient,
     MapboxClient,
     OpenWeatherClient,
+    ProviderAccessError,
     ProviderRoute,
 )
 from routing.route_planning import METERS_PER_MILE, sample_route
@@ -15,8 +20,8 @@ class FakeHttpClient:
         self.payload = payload
         self.calls = []
 
-    def get_json(self, url, *, params, timeout_seconds):
-        self.calls.append((url, params, timeout_seconds))
+    def get_json(self, url, *, provider, params, timeout_seconds):
+        self.calls.append((url, provider, params, timeout_seconds))
         return self.payload
 
 
@@ -39,8 +44,9 @@ class ProviderParsingTests(TestCase):
 
         self.assertEqual(len(result), 3)
         self.assertEqual(result[0].route_id, "abc-1")
-        self.assertEqual(http.calls[0][1]["alternatives"], "true")
-        self.assertEqual(http.calls[0][1]["geometries"], "geojson")
+        self.assertEqual(http.calls[0][1], "Mapbox")
+        self.assertEqual(http.calls[0][2]["alternatives"], "true")
+        self.assertEqual(http.calls[0][2]["geometries"], "geojson")
 
     def test_openweather_converts_mm_per_hour_to_inches(self) -> None:
         eta = datetime(2026, 1, 1, tzinfo=timezone.utc)
@@ -65,7 +71,39 @@ class ProviderParsingTests(TestCase):
         self.assertAlmostEqual(result.rain_in_per_hour, 1.0)
         self.assertAlmostEqual(result.snow_in_per_hour, 0.5)
         self.assertEqual(result.wind_mph, 30)
-        self.assertEqual(http.calls[0][1]["units"], "imperial")
+        self.assertEqual(http.calls[0][1], "OpenWeather")
+        self.assertEqual(http.calls[0][2]["units"], "imperial")
+
+
+class ProviderAccessErrorTests(TestCase):
+    def test_http_authentication_error_preserves_provider_and_body(self) -> None:
+        error = HTTPError(
+            "https://api.example.test/resource",
+            401,
+            "Unauthorized",
+            {},
+            BytesIO(b'{"message":"API key has no access to this product"}'),
+        )
+
+        with patch("routing.external_services.urlopen", side_effect=error):
+            with self.assertRaises(ProviderAccessError) as context:
+                JsonHttpClient().get_json(
+                    "https://api.example.test/resource",
+                    provider="OpenWeather",
+                    params={"appid": "secret"},
+                    timeout_seconds=5,
+                )
+
+        self.assertEqual(context.exception.provider, "OpenWeather")
+        self.assertEqual(context.exception.status_code, 401)
+        self.assertEqual(
+            context.exception.raw_response_body,
+            '{"message":"API key has no access to this product"}',
+        )
+        self.assertEqual(
+            context.exception.detail,
+            "API key has no access to this product",
+        )
 
 
 class RouteSamplingTests(TestCase):

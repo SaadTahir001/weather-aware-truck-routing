@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -22,6 +23,28 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # environment variables retain precedence because override defaults to False.
 load_dotenv(BASE_DIR / '.env')
 load_dotenv(BASE_DIR / 'routing' / '.env')
+
+
+def env_secret(*names: str) -> str:
+    """Return the first configured secret, stripped of surrounding whitespace."""
+
+    for name in names:
+        value = os.getenv(name)
+        if value and value.strip():
+            return value.strip()
+    return ''
+
+
+MAPBOX_ACCESS_TOKEN = env_secret(
+    'MAPBOX_ACCESS_TOKEN',
+    'MAPBOX_API_KEY',
+    'MAPBOX_TOKEN',
+)
+OPENWEATHER_API_KEY = env_secret(
+    'OPENWEATHER_API_KEY',
+    'OPENWEATHERMAP_API_KEY',
+)
+ROUTING_MOCK_MODE = os.getenv('ROUTING_MOCK_MODE', 'auto').strip().lower()
 
 
 # Quick-start development settings - unsuitable for production
