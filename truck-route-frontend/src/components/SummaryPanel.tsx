@@ -1,5 +1,10 @@
+import { useEffect } from "react";
 import type { RouteResult } from "../types/routing";
-import { checkpointNearestHour, forecastAtHour } from "../utils/forecast";
+import {
+  checkpointNearestHour,
+  forecastAtHour,
+  logLiveRoutePayload,
+} from "../utils/forecast";
 import {
   formatDateTime,
   formatDuration,
@@ -27,6 +32,10 @@ export function SummaryPanel({
   forecastHour,
   onSelectRoute,
 }: SummaryPanelProps) {
+  useEffect(() => {
+    routes.forEach(logLiveRoutePayload);
+  }, [routes]);
+
   if (routes.length === 0) {
     return <PlanningGuide />;
   }

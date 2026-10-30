@@ -3,6 +3,7 @@ import type {
   ForecastTimelineEntry,
   RiskBreakdown,
   RiskLevel,
+  RouteResult,
   WeatherReading,
 } from "../types/routing";
 
@@ -14,6 +15,13 @@ const RISK_LEVELS = new Set<RiskLevel>([
   "No Travel",
 ]);
 const TIMELINE_CACHE = new WeakMap<Checkpoint, ForecastTimelineEntry[]>();
+const LOGGED_ROUTE_PAYLOADS = new WeakSet<RouteResult>();
+
+export function logLiveRoutePayload(route: RouteResult): void {
+  if (LOGGED_ROUTE_PAYLOADS.has(route)) return;
+  LOGGED_ROUTE_PAYLOADS.add(route);
+  console.log("LIVE ROUTE PAYLOAD:", route);
+}
 
 export function forecastAtHour(
   checkpoint: Checkpoint,
@@ -30,23 +38,9 @@ export function forecastAtHour(
   );
   if (exactMatch) return exactMatch;
 
-  // A 49-entry response is ordered 0h...48h, so indexing is the most
-  // reliable fallback when an older API response omits hour_offset.
-  if (timeline.length >= 49) {
-    const indexedEntry = timeline[selectedHour];
-    if (indexedEntry) return indexedEntry;
-  }
-
-  return timeline.reduce((closest, candidate) => {
-    const candidateOffset = Number(candidate.hour_offset);
-    const closestOffset = Number(closest.hour_offset);
-    if (!Number.isFinite(candidateOffset)) return closest;
-    if (!Number.isFinite(closestOffset)) return candidate;
-    return Math.abs(candidateOffset - selectedHour) <
-      Math.abs(closestOffset - selectedHour)
-      ? candidate
-      : closest;
-  });
+  // Live providers occasionally omit or duplicate hour_offset. In that case,
+  // the timeline's ordered position is authoritative and must follow the slider.
+  return timeline[Math.min(selectedHour, timeline.length - 1)];
 }
 
 export function normalizeForecastHour(value: number): number {
@@ -98,6 +92,7 @@ function normalizedTimeline(checkpoint: Checkpoint): ForecastTimelineEntry[] {
     source.forecastTimeline,
     source.weather_timeline,
     source.timeline,
+    source.forecasts,
   ].find(Array.isArray);
 
   if (!Array.isArray(rawTimeline)) return [];
@@ -121,8 +116,8 @@ function normalizeTimelineEntry(
     entry.hour_offset ?? entry.hourOffset ?? entry.offset ?? index;
   const weatherSource =
     asRecord(entry.weather) ??
-    asRecord(entry.forecast) ??
     asRecord(entry.weather_data) ??
+    asRecord(entry.forecast) ??
     entry;
   const riskSource =
     asRecord(entry.risk) ??
@@ -141,9 +136,17 @@ function normalizeWeather(
   fallback: WeatherReading,
 ): WeatherReading {
   return {
-    forecast_time: stringValue(
+    forecast_time: timestampValue(
       source,
-      ["forecast_time", "forecastTime", "timestamp", "time"],
+      [
+        "forecast_time",
+        "forecastTime",
+        "valid_at",
+        "validAt",
+        "timestamp",
+        "dt",
+        "time",
+      ],
       fallback.forecast_time,
     ),
     wind_mph: numberValue(
@@ -213,6 +216,20 @@ function stringValue(
 ): string {
   const value = firstValue(source, keys);
   return typeof value === "string" && value ? value : fallback;
+}
+
+function timestampValue(
+  source: Record<string, unknown>,
+  keys: string[],
+  fallback: string,
+): string {
+  const value = firstValue(source, keys);
+  if (typeof value === "string" && value) return value;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const milliseconds = value < 1_000_000_000_000 ? value * 1_000 : value;
+    return new Date(milliseconds).toISOString();
+  }
+  return fallback;
 }
 
 function numberValue(

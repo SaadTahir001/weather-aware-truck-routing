@@ -17,7 +17,11 @@ import type {
   RiskLevel,
   RouteResult,
 } from "../types/routing";
-import { checkpointNearestHour, forecastAtHour } from "../utils/forecast";
+import {
+  checkpointNearestHour,
+  forecastAtHour,
+  logLiveRoutePayload,
+} from "../utils/forecast";
 import {
   formatDateTime,
   formatDuration,
@@ -47,6 +51,10 @@ export function WeatherMap({
   onSelectRoute,
 }: WeatherMapProps) {
   const selectedRoute = routes.find((route) => route.id === selectedRouteId) ?? null;
+
+  useEffect(() => {
+    routes.forEach(logLiveRoutePayload);
+  }, [routes]);
 
   return (
     <section className="relative min-h-[520px] flex-1 overflow-hidden bg-[#09131f]">
