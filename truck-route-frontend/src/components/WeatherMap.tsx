@@ -314,8 +314,12 @@ function CheckpointPopup({
           <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
             {route.name} · CP {checkpoint.sequence}
           </p>
-          <p className="mt-1 text-sm font-bold text-slate-900">{formatDateTime(checkpoint.eta)}</p>
-          <p className="mt-0.5 text-[10px] font-semibold text-slate-500">Selected +{forecastHour}h forecast</p>
+          <p className="mt-1 text-sm font-bold text-slate-900">
+            {formatDateTime(forecast.weather.forecast_time)}
+          </p>
+          <p className="mt-0.5 text-[10px] font-semibold text-slate-500">
+            Selected +{forecastHour}h forecast
+          </p>
         </div>
         <span
           className="rounded-full px-2 py-1 text-[10px] font-bold text-white"
@@ -335,7 +339,12 @@ function CheckpointPopup({
         />
       </div>
       <div className="mt-3 border-t border-slate-200 pt-2 text-[11px] text-slate-500">
-        Weather forecast valid {formatDateTime(forecast.weather.forecast_time)}
+        <span className="block">
+          Weather forecast valid {formatDateTime(forecast.weather.forecast_time)}
+        </span>
+        <span className="mt-0.5 block">
+          Projected checkpoint ETA {formatDateTime(checkpoint.eta)}
+        </span>
       </div>
     </div>
   );
