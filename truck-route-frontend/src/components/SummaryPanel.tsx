@@ -98,7 +98,11 @@ export function SummaryPanel({
                   </div>
 
                   {activeForecast && activeCheckpoint && (
-                    <div className="mt-2 rounded-lg border border-sky-300/10 bg-sky-400/[0.045] px-3 py-2">
+                    <div
+                      className="mt-2 rounded-lg border border-sky-300/10 bg-sky-400/[0.045] px-3 py-2"
+                      data-forecast-hour={forecastHour}
+                      aria-live="polite"
+                    >
                       <div className="flex items-center justify-between gap-3 text-[10px] font-semibold uppercase tracking-[0.11em] text-sky-200/65">
                         <span>+{forecastHour}h · CP {activeCheckpoint.sequence}</span>
                         <span>{formatDateTime(activeForecast.weather.forecast_time)}</span>

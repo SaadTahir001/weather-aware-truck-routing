@@ -304,7 +304,11 @@ function CheckpointPopup({
 }) {
   const weatherDescription = forecast.weather.description || "No description";
   return (
-    <div className="checkpoint-popup">
+    <div
+      className="checkpoint-popup"
+      data-forecast-hour={forecastHour}
+      aria-live="polite"
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">

@@ -5,6 +5,7 @@ import { RouteForm } from "./components/RouteForm";
 import { RouteIcon } from "./components/icons";
 import { SummaryPanel } from "./components/SummaryPanel";
 import { WeatherMap } from "./components/WeatherMap";
+import { normalizeForecastHour } from "./utils/forecast";
 import type {
   RouteCalculationRequest,
   RouteCalculationResponse,
@@ -21,6 +22,10 @@ export default function App() {
   const cancelActiveRequest = useCallback(() => {
     requestController.current?.abort();
     requestController.current = null;
+  }, []);
+
+  const handleForecastHourChange = useCallback((hour: number) => {
+    setForecastHour(normalizeForecastHour(hour));
   }, []);
 
   async function handleCalculate(request: RouteCalculationRequest) {
@@ -117,7 +122,7 @@ export default function App() {
           <ForecastSlider
             departureTime={result?.request.departure_time ?? null}
             value={forecastHour}
-            onChange={setForecastHour}
+            onChange={handleForecastHourChange}
           />
         </div>
       </main>

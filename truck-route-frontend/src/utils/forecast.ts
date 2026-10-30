@@ -14,12 +14,34 @@ export function forecastAtHour(
     return fallbackForecast(checkpoint.weather, checkpoint.risk);
   }
 
-  return timeline.reduce((closest, candidate) =>
-    Math.abs(candidate.hour_offset - forecastHour) <
-    Math.abs(closest.hour_offset - forecastHour)
-      ? candidate
-      : closest,
+  const selectedHour = normalizeForecastHour(forecastHour);
+  const exactMatch = timeline.find(
+    (entry) => Number(entry.hour_offset) === selectedHour,
   );
+  if (exactMatch) return exactMatch;
+
+  // A 49-entry response is ordered 0h...48h, so indexing is the most
+  // reliable fallback when an older API response omits hour_offset.
+  if (timeline.length >= 49) {
+    const indexedEntry = timeline[selectedHour];
+    if (indexedEntry) return indexedEntry;
+  }
+
+  return timeline.reduce((closest, candidate) => {
+    const candidateOffset = Number(candidate.hour_offset);
+    const closestOffset = Number(closest.hour_offset);
+    if (!Number.isFinite(candidateOffset)) return closest;
+    if (!Number.isFinite(closestOffset)) return candidate;
+    return Math.abs(candidateOffset - selectedHour) <
+      Math.abs(closestOffset - selectedHour)
+      ? candidate
+      : closest;
+  });
+}
+
+export function normalizeForecastHour(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(48, Math.max(0, Math.round(value)));
 }
 
 export function checkpointNearestHour(
