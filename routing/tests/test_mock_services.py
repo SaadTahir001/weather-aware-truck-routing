@@ -42,6 +42,18 @@ class MockRoutePlanningTests(TestCase):
             3,
         )
         self.assertTrue(all(route["checkpoints"] for route in result["routes"]))
+        self.assertTrue(
+            all(
+                len(checkpoint["forecast_timeline"]) == 49
+                for route in result["routes"]
+                for checkpoint in route["checkpoints"]
+            )
+        )
+        first_timeline = result["routes"][0]["checkpoints"][0]["forecast_timeline"]
+        self.assertNotEqual(
+            first_timeline[0]["weather"]["forecast_time"],
+            first_timeline[1]["weather"]["forecast_time"],
+        )
         self.assertIsNotNone(result["recommended_route_id"])
         self.assertIn(
             "rejected",

@@ -21,6 +21,12 @@ export interface RiskBreakdown {
   overall: RiskLevel;
 }
 
+export interface ForecastTimelineEntry {
+  hour_offset: number;
+  weather: WeatherReading;
+  risk: RiskBreakdown;
+}
+
 export interface Checkpoint {
   sequence: number;
   coordinate: Coordinate;
@@ -28,6 +34,7 @@ export interface Checkpoint {
   segment_distance_miles: number;
   weather: WeatherReading;
   risk: RiskBreakdown;
+  forecast_timeline: ForecastTimelineEntry[];
 }
 
 export interface RouteRanking {

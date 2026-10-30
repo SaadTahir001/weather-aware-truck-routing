@@ -136,6 +136,7 @@ class MockRoutePlanningService:
             zip(provider_routes, sampled_routes)
         ):
             weather_readings: list[WeatherReading] = []
+            weather_timelines: list[tuple[WeatherReading, ...]] = []
             risk_checkpoints: list[CheckpointInput] = []
             for checkpoint_index, checkpoint in enumerate(checkpoints):
                 progress = (
@@ -151,6 +152,20 @@ class MockRoutePlanningService:
                     checkpoint_index=checkpoint_index,
                 )
                 weather_readings.append(weather)
+                timeline = tuple(
+                    _mock_weather(
+                        _pattern_risk(
+                            route_index,
+                            (progress + (hour_offset / 48) * 0.55) % 1.0,
+                        ),
+                        departure_time + timedelta(hours=hour_offset),
+                        route_index=route_index,
+                        checkpoint_index=checkpoint_index,
+                        hour_offset=hour_offset,
+                    )
+                    for hour_offset in range(49)
+                )
+                weather_timelines.append(timeline)
                 risk_checkpoints.append(
                     CheckpointInput(
                         name=f"Checkpoint {checkpoint_index + 1}",
@@ -166,6 +181,7 @@ class MockRoutePlanningService:
                     provider_route=provider_route,
                     sampled_checkpoints=checkpoints,
                     weather=tuple(weather_readings),
+                    weather_timelines=tuple(weather_timelines),
                 )
             )
             risk_inputs.append(
@@ -186,6 +202,7 @@ class MockRoutePlanningService:
                 evaluations[enriched.provider_route.route_id],
                 recommendation.recommended,
                 departure_time,
+                load_weight_lb,
             )
             for enriched in enriched_routes
         ]
@@ -290,6 +307,7 @@ def _mock_weather(
     *,
     route_index: int,
     checkpoint_index: int,
+    hour_offset: int = 0,
 ) -> WeatherReading:
     values = {
         RiskLevel.LOW: (18.0, 0.02, 0.0, "partly cloudy"),
@@ -306,7 +324,13 @@ def _mock_weather(
         rain = 0.0
         snow = 1.35 if requested_risk == RiskLevel.HIGH else 2.35
         description = "heavy snow" if requested_risk == RiskLevel.HIGH else "severe snow"
-    temperature = 61.0 - route_index * 2.5 - checkpoint_index * 0.8
+    diurnal_shift = math.sin((hour_offset - 7) / 24 * math.tau) * 6.0
+    temperature = (
+        61.0
+        - route_index * 2.5
+        - checkpoint_index * 0.8
+        + diurnal_shift
+    )
     return WeatherReading(
         forecast_time=eta.replace(minute=0, second=0, microsecond=0),
         wind_mph=wind,

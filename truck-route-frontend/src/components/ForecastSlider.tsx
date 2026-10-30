@@ -86,7 +86,7 @@ export function ForecastSlider({
         </div>
 
         <div className="rounded-lg border border-white/8 bg-white/[0.03] px-3 py-2 text-xs text-slate-400 lg:max-w-64">
-          Showing ETA-aligned forecasts nearest <strong className="text-slate-200">+{value}h</strong>.
+          Showing checkpoint weather and risk at <strong className="text-slate-200">+{value}h</strong>.
         </div>
       </div>
     </section>

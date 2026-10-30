@@ -99,6 +99,8 @@ export default function App() {
             recommendedRouteId={result?.recommended_route_id ?? null}
             selectedRouteId={selectedRouteId}
             recommendationSummary={result?.recommendation_summary ?? ""}
+            departureTime={result?.request.departure_time ?? null}
+            forecastHour={forecastHour}
             onSelectRoute={setSelectedRouteId}
           />
         </aside>

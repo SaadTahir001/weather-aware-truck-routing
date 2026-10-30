@@ -1,4 +1,5 @@
 import type { RouteResult } from "../types/routing";
+import { checkpointNearestHour, forecastAtHour } from "../utils/forecast";
 import {
   formatDateTime,
   formatDuration,
@@ -12,6 +13,8 @@ interface SummaryPanelProps {
   recommendedRouteId: string | null;
   selectedRouteId: string | null;
   recommendationSummary: string;
+  departureTime: string | null;
+  forecastHour: number;
   onSelectRoute: (routeId: string) => void;
 }
 
@@ -20,6 +23,8 @@ export function SummaryPanel({
   recommendedRouteId,
   selectedRouteId,
   recommendationSummary,
+  departureTime,
+  forecastHour,
   onSelectRoute,
 }: SummaryPanelProps) {
   if (routes.length === 0) {
@@ -41,6 +46,14 @@ export function SummaryPanel({
           const recommended = route.id === recommendedRouteId;
           const selected = route.id === selectedRouteId;
           const rejected = route.decision.status === "rejected";
+          const activeCheckpoint = checkpointNearestHour(
+            route.checkpoints,
+            departureTime,
+            forecastHour,
+          );
+          const activeForecast = activeCheckpoint
+            ? forecastAtHour(activeCheckpoint, forecastHour)
+            : null;
           return (
             <button
               type="button"
@@ -83,6 +96,23 @@ export function SummaryPanel({
                     <Metric label="Severe" value={`${route.ranking.severe_miles.toFixed(1)} mi`} tone={route.ranking.severe_miles > 0 ? "danger" : undefined} />
                     <Metric label="High" value={`${route.ranking.high_miles.toFixed(1)} mi`} tone={route.ranking.high_miles > 0 ? "warning" : undefined} />
                   </div>
+
+                  {activeForecast && activeCheckpoint && (
+                    <div className="mt-2 rounded-lg border border-sky-300/10 bg-sky-400/[0.045] px-3 py-2">
+                      <div className="flex items-center justify-between gap-3 text-[10px] font-semibold uppercase tracking-[0.11em] text-sky-200/65">
+                        <span>+{forecastHour}h · CP {activeCheckpoint.sequence}</span>
+                        <span>{formatDateTime(activeForecast.weather.forecast_time)}</span>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-300">
+                        <span className="capitalize">{activeForecast.weather.description || "No description"}</span>
+                        {" · "}{activeForecast.weather.temperature_f == null
+                          ? "—"
+                          : `${activeForecast.weather.temperature_f.toFixed(0)}°F`}
+                        {" · "}{activeForecast.weather.wind_mph.toFixed(0)} mph wind
+                        {" · "}{activeForecast.risk.overall} risk
+                      </p>
+                    </div>
+                  )}
 
                   {selected && (
                     <div className="mt-3 border-t border-white/8 pt-3">

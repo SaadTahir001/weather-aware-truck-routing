@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest import TestCase
 
 from routing.external_services import (
@@ -60,6 +60,12 @@ class FakeWeatherClient:
             description="clear",
         )
 
+    def forecast_timeline(self, coordinate, start_time, hours=48):
+        return tuple(
+            self.forecast_at(coordinate, start_time + timedelta(hours=offset))
+            for offset in range(hours + 1)
+        )
+
 
 class RoutePlanningTests(TestCase):
     def test_builds_frontend_payload_and_recommends_lowest_risk_route(self) -> None:
@@ -86,3 +92,7 @@ class RoutePlanningTests(TestCase):
         self.assertEqual(result["routes"][0]["decision"]["status"], "not_recommended")
         self.assertEqual(result["routes"][0]["geometry"]["type"], "LineString")
         self.assertEqual(len(result["routes"][0]["checkpoints"]), 3)
+        self.assertEqual(
+            len(result["routes"][0]["checkpoints"][0]["forecast_timeline"]),
+            49,
+        )

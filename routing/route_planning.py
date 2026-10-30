@@ -17,9 +17,11 @@ from .external_services import (
 )
 from .services import (
     CheckpointInput,
+    CheckpointRisk,
     RiskLevel,
     RouteEvaluation,
     RouteInput,
+    calculate_checkpoint_risk,
     recommend_best_route,
 )
 
@@ -43,6 +45,7 @@ class EnrichedRoute:
     provider_route: ProviderRoute
     sampled_checkpoints: tuple[SampledCheckpoint, ...]
     weather: tuple[WeatherReading, ...]
+    weather_timelines: tuple[tuple[WeatherReading, ...], ...]
 
 
 class RoutePlanningService:
@@ -111,25 +114,42 @@ class RoutePlanningService:
                 f"the configured limit is {self.max_checkpoints_per_request}."
             )
 
-        weather_cache: dict[tuple[float, float, int], WeatherReading] = {}
+        weather_timeline_cache: dict[
+            tuple[float, float, int], tuple[WeatherReading, ...]
+        ] = {}
         enriched: list[EnrichedRoute] = []
         risk_inputs: list[RouteInput] = []
         for provider_route, checkpoints in zip(provider_routes, sampled_routes):
             weather_readings: list[WeatherReading] = []
+            weather_timelines: list[tuple[WeatherReading, ...]] = []
             risk_checkpoints: list[CheckpointInput] = []
             for sequence, checkpoint in enumerate(checkpoints):
                 cache_key = (
                     round(checkpoint.coordinate.longitude, 4),
                     round(checkpoint.coordinate.latitude, 4),
-                    int(checkpoint.eta.timestamp() // 3_600),
+                    int(departure_time.timestamp() // 3_600),
                 )
-                weather = weather_cache.get(cache_key)
-                if weather is None:
-                    weather = self.weather_client.forecast_at(
-                        checkpoint.coordinate, checkpoint.eta
+                timeline = weather_timeline_cache.get(cache_key)
+                if timeline is None:
+                    timeline = self.weather_client.forecast_timeline(
+                        checkpoint.coordinate,
+                        departure_time,
+                        hours=48,
                     )
-                    weather_cache[cache_key] = weather
+                    weather_timeline_cache[cache_key] = timeline
+                weather = min(
+                    timeline,
+                    key=lambda reading: abs(
+                        (reading.forecast_time - checkpoint.eta).total_seconds()
+                    ),
+                )
+                if abs((weather.forecast_time - checkpoint.eta).total_seconds()) > 5_400:
+                    weather = self.weather_client.forecast_at(
+                        checkpoint.coordinate,
+                        checkpoint.eta,
+                    )
                 weather_readings.append(weather)
+                weather_timelines.append(timeline)
                 risk_checkpoints.append(
                     CheckpointInput(
                         name=f"Checkpoint {sequence + 1}",
@@ -145,6 +165,7 @@ class RoutePlanningService:
                     provider_route=provider_route,
                     sampled_checkpoints=checkpoints,
                     weather=tuple(weather_readings),
+                    weather_timelines=tuple(weather_timelines),
                 )
             )
             risk_inputs.append(
@@ -170,6 +191,7 @@ class RoutePlanningService:
                 evaluation_by_id[route.provider_route.route_id],
                 recommendation.recommended,
                 departure_time,
+                load_weight_lb,
             )
             for route in enriched
         ]
@@ -213,15 +235,37 @@ class RoutePlanningService:
         evaluation: RouteEvaluation,
         recommended: RouteEvaluation | None,
         departure_time: datetime,
+        load_weight_lb: int,
     ) -> dict[str, Any]:
         checkpoint_payloads = []
-        for sequence, (sample, weather, risk) in enumerate(
+        for sequence, (sample, weather, risk, timeline) in enumerate(
             zip(
                 route.sampled_checkpoints,
                 route.weather,
                 evaluation.checkpoint_risks,
+                route.weather_timelines,
             )
         ):
+            timeline_payloads = []
+            for hour_offset, timeline_weather in enumerate(timeline):
+                timeline_risk = calculate_checkpoint_risk(
+                    CheckpointInput(
+                        name=f"Checkpoint {sequence + 1}",
+                        eta=timeline_weather.forecast_time,
+                        segment_distance_miles=sample.segment_distance_miles,
+                        wind_mph=timeline_weather.wind_mph,
+                        rain_in_per_hour=timeline_weather.rain_in_per_hour,
+                        snow_in_per_hour=timeline_weather.snow_in_per_hour,
+                    ),
+                    load_weight_lb,
+                )
+                timeline_payloads.append(
+                    {
+                        "hour_offset": hour_offset,
+                        "weather": _weather_dict(timeline_weather),
+                        "risk": _risk_dict(timeline_risk),
+                    }
+                )
             checkpoint_payloads.append(
                 {
                     "sequence": sequence + 1,
@@ -233,20 +277,9 @@ class RoutePlanningService:
                     "segment_distance_miles": round(
                         sample.segment_distance_miles, 2
                     ),
-                    "weather": {
-                        "forecast_time": weather.forecast_time,
-                        "wind_mph": round(weather.wind_mph, 2),
-                        "rain_in_per_hour": round(weather.rain_in_per_hour, 3),
-                        "snow_in_per_hour": round(weather.snow_in_per_hour, 3),
-                        "temperature_f": weather.temperature_f,
-                        "description": weather.description,
-                    },
-                    "risk": {
-                        "wind": risk.wind_risk.label,
-                        "rain": risk.rain_risk.label,
-                        "snow": risk.snow_risk.label,
-                        "overall": risk.final_risk.label,
-                    },
+                    "weather": _weather_dict(weather),
+                    "risk": _risk_dict(risk),
+                    "forecast_timeline": timeline_payloads,
                 }
             )
 
@@ -388,6 +421,26 @@ def _decision(
         "not_recommended",
         f"All ranking criteria tied with {recommended.route_name}; provider order broke the tie.",
     )
+
+
+def _weather_dict(weather: WeatherReading) -> dict[str, Any]:
+    return {
+        "forecast_time": weather.forecast_time,
+        "wind_mph": round(weather.wind_mph, 2),
+        "rain_in_per_hour": round(weather.rain_in_per_hour, 3),
+        "snow_in_per_hour": round(weather.snow_in_per_hour, 3),
+        "temperature_f": weather.temperature_f,
+        "description": weather.description,
+    }
+
+
+def _risk_dict(risk: CheckpointRisk) -> dict[str, str]:
+    return {
+        "wind": risk.wind_risk.label,
+        "rain": risk.rain_risk.label,
+        "snow": risk.snow_risk.label,
+        "overall": risk.final_risk.label,
+    }
 
 
 def _location_dict(location: Any) -> dict[str, Any]:

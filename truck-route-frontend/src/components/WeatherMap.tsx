@@ -11,7 +11,13 @@ import {
   Tooltip,
   useMap,
 } from "react-leaflet";
-import type { Checkpoint, RiskLevel, RouteResult } from "../types/routing";
+import type {
+  Checkpoint,
+  ForecastTimelineEntry,
+  RiskLevel,
+  RouteResult,
+} from "../types/routing";
+import { checkpointNearestHour, forecastAtHour } from "../utils/forecast";
 import {
   formatDateTime,
   formatDuration,
@@ -62,6 +68,7 @@ export function WeatherMap({
             .filter((route) => route.id === selectedRouteId)
             .flatMap((route) =>
               route.checkpoints.map((checkpoint) => {
+                const forecast = forecastAtHour(checkpoint, forecastHour);
                 const timeDistance = checkpointTimeDistance(
                   checkpoint,
                   departureTime,
@@ -75,10 +82,10 @@ export function WeatherMap({
                       checkpoint.coordinate.latitude,
                       checkpoint.coordinate.longitude,
                     ]}
-                    radius={5_000 + riskScore(checkpoint.risk.overall) * 2_500}
+                    radius={5_000 + riskScore(forecast.risk.overall) * 2_500}
                     pathOptions={{
-                      color: RISK_COLORS[checkpoint.risk.overall],
-                      fillColor: RISK_COLORS[checkpoint.risk.overall],
+                      color: RISK_COLORS[forecast.risk.overall],
+                      fillColor: RISK_COLORS[forecast.risk.overall],
                       fillOpacity: temporalOpacity,
                       opacity: Math.min(0.2, temporalOpacity + 0.04),
                       weight: 1,
@@ -126,6 +133,7 @@ export function WeatherMap({
           {routes.flatMap((route, routeIndex) =>
           route.checkpoints.map((checkpoint) => {
             const selected = route.id === selectedRouteId;
+            const forecast = forecastAtHour(checkpoint, forecastHour);
             const timeDistance = checkpointTimeDistance(
               checkpoint,
               departureTime,
@@ -142,7 +150,7 @@ export function WeatherMap({
                 radius={selected && nearSelectedHour ? 7 : selected ? 5.5 : 4}
                 pathOptions={{
                   color: ROUTE_COLORS[routeIndex % ROUTE_COLORS.length],
-                  fillColor: RISK_COLORS[checkpoint.risk.overall],
+                  fillColor: RISK_COLORS[forecast.risk.overall],
                   fillOpacity: selected ? 1 : 0.72,
                   opacity: selected ? 1 : 0.7,
                   weight: selected && nearSelectedHour ? 3 : 2,
@@ -150,7 +158,12 @@ export function WeatherMap({
                 eventHandlers={{ click: () => onSelectRoute(route.id) }}
               >
                 <Popup maxWidth={300} minWidth={245}>
-                  <CheckpointPopup route={route} checkpoint={checkpoint} />
+                  <CheckpointPopup
+                    route={route}
+                    checkpoint={checkpoint}
+                    forecast={forecast}
+                    forecastHour={forecastHour}
+                  />
                 </Popup>
               </CircleMarker>
             );
@@ -159,7 +172,12 @@ export function WeatherMap({
         </Pane>
       </MapContainer>
 
-      <MapHeader routes={routes} selectedRoute={selectedRoute} />
+      <MapHeader
+        routes={routes}
+        selectedRoute={selectedRoute}
+        departureTime={departureTime}
+        forecastHour={forecastHour}
+      />
       <RiskLegend />
       {routes.length === 0 && <EmptyMapState />}
     </section>
@@ -194,10 +212,21 @@ function FitRouteBounds({ routes }: { routes: RouteResult[] }) {
 function MapHeader({
   routes,
   selectedRoute,
+  departureTime,
+  forecastHour,
 }: {
   routes: RouteResult[];
   selectedRoute: RouteResult | null;
+  departureTime: string | null;
+  forecastHour: number;
 }) {
+  const activeCheckpoint = selectedRoute
+    ? checkpointNearestHour(selectedRoute.checkpoints, departureTime, forecastHour)
+    : null;
+  const activeForecast = activeCheckpoint
+    ? forecastAtHour(activeCheckpoint, forecastHour)
+    : null;
+
   return (
     <div className="pointer-events-none absolute left-4 right-4 top-4 z-[500] flex items-start justify-between gap-3">
       <div className="rounded-xl border border-white/10 bg-slate-950/88 px-3.5 py-2.5 shadow-2xl backdrop-blur-xl">
@@ -207,6 +236,13 @@ function MapHeader({
         <p className="mt-0.5 text-sm font-semibold text-white">
           {selectedRoute ? selectedRoute.name : routes.length ? "Three route comparison" : "Awaiting trip details"}
         </p>
+        {activeForecast && activeCheckpoint && (
+          <p className="mt-1 text-[11px] text-slate-400">
+            +{forecastHour}h · CP {activeCheckpoint.sequence} · {activeForecast.weather.temperature_f == null
+              ? "—"
+              : `${activeForecast.weather.temperature_f.toFixed(0)}°F`} · {activeForecast.weather.description || "No description"}
+          </p>
+        )}
       </div>
       {routes.length > 0 && (
         <div className="rounded-xl border border-white/10 bg-slate-950/88 px-3.5 py-2.5 text-right shadow-2xl backdrop-blur-xl">
@@ -258,11 +294,15 @@ function EmptyMapState() {
 function CheckpointPopup({
   route,
   checkpoint,
+  forecast,
+  forecastHour,
 }: {
   route: RouteResult;
   checkpoint: Checkpoint;
+  forecast: ForecastTimelineEntry;
+  forecastHour: number;
 }) {
-  const weatherDescription = checkpoint.weather.description || "No description";
+  const weatherDescription = forecast.weather.description || "No description";
   return (
     <div className="checkpoint-popup">
       <div className="flex items-start justify-between gap-3">
@@ -271,26 +311,27 @@ function CheckpointPopup({
             {route.name} · CP {checkpoint.sequence}
           </p>
           <p className="mt-1 text-sm font-bold text-slate-900">{formatDateTime(checkpoint.eta)}</p>
+          <p className="mt-0.5 text-[10px] font-semibold text-slate-500">Selected +{forecastHour}h forecast</p>
         </div>
         <span
           className="rounded-full px-2 py-1 text-[10px] font-bold text-white"
-          style={{ backgroundColor: RISK_COLORS[checkpoint.risk.overall] }}
+          style={{ backgroundColor: RISK_COLORS[forecast.risk.overall] }}
         >
-          {checkpoint.risk.overall}
+          {forecast.risk.overall}
         </span>
       </div>
       <p className="mt-2 capitalize text-xs text-slate-500">{weatherDescription}</p>
       <div className="mt-3 grid grid-cols-3 gap-2">
-        <PopupMetric icon={<WindIcon />} label="Wind" value={`${checkpoint.weather.wind_mph.toFixed(0)} mph`} />
-        <PopupMetric icon={<RainIcon />} label="Rain" value={`${checkpoint.weather.rain_in_per_hour.toFixed(2)} in/h`} />
+        <PopupMetric icon={<WindIcon />} label="Wind" value={`${forecast.weather.wind_mph.toFixed(0)} mph`} />
+        <PopupMetric icon={<RainIcon />} label="Rain" value={`${forecast.weather.rain_in_per_hour.toFixed(2)} in/h`} />
         <PopupMetric
           icon={<TemperatureIcon />}
           label="Temp"
-          value={checkpoint.weather.temperature_f == null ? "—" : `${checkpoint.weather.temperature_f.toFixed(0)}°F`}
+          value={forecast.weather.temperature_f == null ? "—" : `${forecast.weather.temperature_f.toFixed(0)}°F`}
         />
       </div>
       <div className="mt-3 border-t border-slate-200 pt-2 text-[11px] text-slate-500">
-        Weather forecast valid {formatDateTime(checkpoint.weather.forecast_time)}
+        Weather forecast valid {formatDateTime(forecast.weather.forecast_time)}
       </div>
     </div>
   );

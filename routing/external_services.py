@@ -6,7 +6,7 @@ import json
 import os
 from copy import deepcopy
 from dataclasses import dataclass, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -351,6 +351,23 @@ class OpenWeatherClient:
         coordinate: Coordinate,
         eta: datetime,
     ) -> WeatherReading:
+        return self._reading_at(self._fetch_hourly(coordinate), eta)
+
+    def forecast_timeline(
+        self,
+        coordinate: Coordinate,
+        start_time: datetime,
+        hours: int = 48,
+    ) -> tuple[WeatherReading, ...]:
+        """Return the closest provider forecast for every hour in the window."""
+
+        hourly = self._fetch_hourly(coordinate)
+        return tuple(
+            self._reading_at(hourly, start_time + timedelta(hours=hour_offset))
+            for hour_offset in range(hours + 1)
+        )
+
+    def _fetch_hourly(self, coordinate: Coordinate) -> list[dict[str, Any]]:
         payload = self.http.get_json(
             f"{self.base_url}{self.ONE_CALL_PATH}",
             provider="OpenWeather",
@@ -371,10 +388,17 @@ class OpenWeatherClient:
                 raw_response_body=json.dumps(payload),
             )
         hourly = payload.get("hourly") or []
-        if not hourly:
+        if not isinstance(hourly, list) or not hourly:
             raise ForecastUnavailableError(
                 "OpenWeather returned no hourly forecast for a checkpoint."
             )
+        return hourly
+
+    def _reading_at(
+        self,
+        hourly: list[dict[str, Any]],
+        eta: datetime,
+    ) -> WeatherReading:
         target_timestamp = eta.timestamp()
         try:
             closest = min(hourly, key=lambda item: abs(float(item["dt"]) - target_timestamp))

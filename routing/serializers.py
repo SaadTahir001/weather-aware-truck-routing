@@ -56,6 +56,12 @@ class RiskBreakdownSerializer(serializers.Serializer):
     overall = serializers.CharField()
 
 
+class ForecastTimelineEntrySerializer(serializers.Serializer):
+    hour_offset = serializers.IntegerField(min_value=0, max_value=48)
+    weather = WeatherSerializer()
+    risk = RiskBreakdownSerializer()
+
+
 class CheckpointResultSerializer(serializers.Serializer):
     sequence = serializers.IntegerField()
     coordinate = CoordinateSerializer()
@@ -63,6 +69,7 @@ class CheckpointResultSerializer(serializers.Serializer):
     segment_distance_miles = serializers.FloatField()
     weather = WeatherSerializer()
     risk = RiskBreakdownSerializer()
+    forecast_timeline = ForecastTimelineEntrySerializer(many=True)
 
 
 class RankingSerializer(serializers.Serializer):
