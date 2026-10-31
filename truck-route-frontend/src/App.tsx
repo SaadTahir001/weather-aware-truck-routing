@@ -52,16 +52,16 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#07111f] text-slate-100">
-      <header className="border-b border-white/8 bg-slate-950/75 backdrop-blur-xl">
+    <div className="app-shell min-h-screen text-slate-50">
+      <header className="app-header sticky top-0 z-[1000]">
         <div className="mx-auto flex max-w-[1800px] items-center justify-between px-4 py-3 sm:px-6">
           <div className="flex items-center gap-3">
-            <div className="grid size-10 place-items-center rounded-xl bg-emerald-400 text-slate-950 shadow-[0_0_30px_rgba(49,214,163,0.16)]">
+            <div className="grid size-10 place-items-center rounded-xl bg-[#0297DE] text-slate-50 shadow-[0_0_30px_rgba(2,151,222,0.28)]">
               <RouteIcon className="size-5" />
             </div>
             <div>
-              <h1 className="text-base font-extrabold tracking-tight text-white">HaulCast</h1>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+              <h1 className="text-base font-extrabold tracking-tight text-slate-50">HaulCast</h1>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
                 Weather-aware routing
               </p>
             </div>
@@ -69,20 +69,20 @@ export default function App() {
           <div
             className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-semibold ${
               result?.data_source === "mock"
-                ? "border-amber-300/15 bg-amber-400/[0.06] text-amber-200"
-                : "border-white/8 bg-white/[0.035] text-slate-400"
+                ? "border-[#FC734D]/35 bg-[#FC734D]/10 text-slate-100"
+                : "border-[#0297DE]/35 bg-[#0297DE]/10 text-slate-200"
             }`}
             title={result?.mock_reason ?? undefined}
           >
             <span className="relative flex size-2">
               <span
                 className={`absolute inline-flex size-full animate-ping rounded-full opacity-50 ${
-                  result?.data_source === "mock" ? "bg-amber-400" : "bg-emerald-400"
+                  result?.data_source === "mock" ? "bg-[#FC734D]" : "bg-[#0297DE]"
                 }`}
               />
               <span
                 className={`relative inline-flex size-2 rounded-full ${
-                  result?.data_source === "mock" ? "bg-amber-400" : "bg-emerald-400"
+                  result?.data_source === "mock" ? "bg-[#FC734D]" : "bg-[#0297DE]"
                 }`}
               />
             </span>
@@ -92,7 +92,7 @@ export default function App() {
       </header>
 
       <main className="mx-auto grid max-w-[1800px] grid-cols-1 gap-4 p-4 sm:p-5 xl:grid-cols-[390px_minmax(0,1fr)]">
-        <aside className="flex min-w-0 flex-col gap-4">
+        <aside className="sidebar-rail flex min-w-0 flex-col gap-4 p-2">
           <RouteForm
             loading={loading}
             error={error}

@@ -64,9 +64,9 @@ export function RouteForm({ loading, error, onSubmit, onCancel }: RouteFormProps
 
   return (
     <section className="panel-shell overflow-hidden" aria-labelledby="trip-form-title">
-      <div className="border-b border-white/8 px-5 py-4">
+      <div className="border-b border-[#0297DE]/20 px-5 py-4">
         <p className="eyebrow">New dispatch analysis</p>
-        <h2 id="trip-form-title" className="mt-1 text-lg font-semibold text-white">
+        <h2 id="trip-form-title" className="mt-1 text-lg font-semibold text-slate-50">
           Plan a weather-safe route
         </h2>
       </div>
@@ -85,7 +85,7 @@ export function RouteForm({ loading, error, onSubmit, onCancel }: RouteFormProps
           <button
             type="button"
             onClick={swapLocations}
-            className="absolute right-3 top-[66px] z-10 grid size-8 place-items-center rounded-full border border-white/10 bg-slate-900 text-slate-400 transition hover:border-emerald-300/30 hover:text-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-300/50"
+            className="absolute right-3 top-[66px] z-10 grid size-8 place-items-center rounded-full border border-[#0297DE]/20 bg-[#02070A] text-slate-400 transition hover:border-[#0297DE] hover:text-[#0297DE] focus:outline-none focus:ring-2 focus:ring-[#FC734D]/55"
             aria-label="Swap origin and destination"
           >
             <SwapIcon className="size-4 rotate-90" />
@@ -129,9 +129,9 @@ export function RouteForm({ loading, error, onSubmit, onCancel }: RouteFormProps
         {error && (
           <div
             role="alert"
-            className="flex gap-3 rounded-xl border border-red-300/15 bg-red-400/8 p-3 text-sm text-red-100"
+            className="flex gap-3 rounded-xl border border-[#FC734D]/40 bg-[#FC734D]/12 p-3 text-sm text-slate-100"
           >
-            <AlertIcon className="mt-0.5 size-4 shrink-0 text-red-300" />
+            <AlertIcon className="mt-0.5 size-4 shrink-0 text-[#FC734D]" />
             <p>{error}</p>
           </div>
         )}
@@ -139,11 +139,11 @@ export function RouteForm({ loading, error, onSubmit, onCancel }: RouteFormProps
         <button
           type="submit"
           disabled={loading}
-          className="group flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 py-3 text-sm font-bold text-slate-950 shadow-[0_10px_30px_rgba(49,214,163,0.15)] transition hover:bg-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:ring-offset-2 focus:ring-offset-slate-950 disabled:cursor-wait disabled:opacity-65"
+          className="group flex w-full items-center justify-center gap-2 rounded-xl bg-[#0297DE] px-4 py-3 text-sm font-bold text-slate-50 shadow-[0_12px_32px_rgba(2,151,222,0.24)] transition hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-[#FC734D] focus:ring-offset-2 focus:ring-offset-[#02070A] disabled:cursor-wait disabled:opacity-65"
         >
           {loading ? (
             <>
-              <span className="size-4 animate-spin rounded-full border-2 border-slate-900/30 border-t-slate-900" />
+              <span className="size-4 animate-spin rounded-full border-2 border-slate-50/35 border-t-slate-50" />
               Sampling routes & weather
             </>
           ) : (
@@ -182,7 +182,7 @@ function FormField({ icon, label, suffix, ...inputProps }: FormFieldProps) {
     <label htmlFor={inputProps.id} className="block">
       <span className="mb-1.5 block text-xs font-medium text-slate-400">{label}</span>
       <span className="relative block">
-        <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-500">
+        <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[#0297DE]">
           {icon}
         </span>
         <input

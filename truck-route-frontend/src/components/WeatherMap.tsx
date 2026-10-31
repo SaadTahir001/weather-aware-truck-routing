@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { Fragment, useEffect, useMemo } from "react";
 import { latLngBounds, type LatLngExpression } from "leaflet";
 import {
   Circle,
@@ -25,6 +25,7 @@ import {
 import {
   formatDateTime,
   formatDuration,
+  PALETTE,
   RISK_COLORS,
   riskScore,
   ROUTE_COLORS,
@@ -57,7 +58,7 @@ export function WeatherMap({
   }, [routes]);
 
   return (
-    <section className="relative min-h-[520px] flex-1 overflow-hidden bg-[#09131f]">
+    <section className="relative min-h-[520px] flex-1 overflow-hidden bg-[#0B1218]">
       <MapContainer
         center={DEFAULT_CENTER}
         zoom={4}
@@ -109,19 +110,22 @@ export function WeatherMap({
           {routes.map((route, index) => {
             const selected = route.id === selectedRouteId;
             const recommended = route.id === recommendedRouteId;
+            const routeColor = recommended
+              ? PALETTE.blue
+              : ROUTE_COLORS[index % ROUTE_COLORS.length];
             const positions = route.geometry.coordinates.map(
               ([longitude, latitude]) => [latitude, longitude] as LatLngExpression,
             );
 
             return (
+              <Fragment key={route.id}>
               <Polyline
-                key={route.id}
                 positions={positions}
                 pathOptions={{
-                  color: ROUTE_COLORS[index % ROUTE_COLORS.length],
-                  weight: selected ? 7 : recommended ? 5 : 4,
-                  opacity: selected ? 1 : recommended ? 0.9 : 0.55,
-                  dashArray: route.eligible ? undefined : "9 9",
+                  color: routeColor,
+                  weight: selected ? 7 : recommended ? 6 : 5,
+                  opacity: selected ? 1 : recommended ? 0.96 : 0.62,
+                  dashArray: route.eligible ? undefined : "10 8",
                   lineCap: "round",
                 }}
                 eventHandlers={{ click: () => onSelectRoute(route.id) }}
@@ -133,6 +137,20 @@ export function WeatherMap({
                   </div>
                 </Tooltip>
               </Polyline>
+              {!recommended && (
+                <Polyline
+                  positions={positions}
+                  pathOptions={{
+                    color: PALETTE.white,
+                    weight: selected ? 2.5 : 1.75,
+                    opacity: selected ? 0.9 : 0.58,
+                    dashArray: "2 11",
+                    lineCap: "round",
+                  }}
+                  eventHandlers={{ click: () => onSelectRoute(route.id) }}
+                />
+              )}
+              </Fragment>
             );
           })}
         </Pane>
@@ -141,6 +159,7 @@ export function WeatherMap({
           {routes.flatMap((route, routeIndex) =>
           route.checkpoints.map((checkpoint) => {
             const selected = route.id === selectedRouteId;
+            const recommended = route.id === recommendedRouteId;
             const forecast = forecastAtHour(checkpoint, forecastHour);
             const timeDistance = checkpointTimeDistance(
               checkpoint,
@@ -157,7 +176,12 @@ export function WeatherMap({
                 ]}
                 radius={selected && nearSelectedHour ? 7 : selected ? 5.5 : 4}
                 pathOptions={{
-                  color: ROUTE_COLORS[routeIndex % ROUTE_COLORS.length],
+                  className: selected && nearSelectedHour ? "active-checkpoint-marker" : undefined,
+                  color: recommended
+                    ? PALETTE.blue
+                    : selected
+                      ? PALETTE.cantaloupe
+                      : ROUTE_COLORS[routeIndex % ROUTE_COLORS.length],
                   fillColor: RISK_COLORS[forecast.risk.overall],
                   fillOpacity: selected ? 1 : 0.72,
                   opacity: selected ? 1 : 0.7,
@@ -237,11 +261,11 @@ function MapHeader({
 
   return (
     <div className="pointer-events-none absolute left-4 right-4 top-4 z-[500] flex items-start justify-between gap-3">
-      <div className="rounded-xl border border-white/10 bg-slate-950/88 px-3.5 py-2.5 shadow-2xl backdrop-blur-xl">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+      <div className="map-glass-card rounded-xl px-3.5 py-2.5">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#0297DE]">
           Network weather view
         </p>
-        <p className="mt-0.5 text-sm font-semibold text-white">
+        <p className="mt-0.5 text-sm font-semibold text-slate-50">
           {selectedRoute ? selectedRoute.name : routes.length ? "Three route comparison" : "Awaiting trip details"}
         </p>
         {activeForecast && activeCheckpoint && (
@@ -253,9 +277,9 @@ function MapHeader({
         )}
       </div>
       {routes.length > 0 && (
-        <div className="rounded-xl border border-white/10 bg-slate-950/88 px-3.5 py-2.5 text-right shadow-2xl backdrop-blur-xl">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Routes</p>
-          <p className="mt-0.5 text-sm font-semibold text-white">{routes.length} analyzed</p>
+        <div className="map-glass-card rounded-xl border-[#FC734D]/35 px-3.5 py-2.5 text-right">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#FC734D]">Routes</p>
+          <p className="mt-0.5 text-sm font-semibold text-slate-50">{routes.length} analyzed</p>
         </div>
       )}
     </div>
@@ -264,15 +288,15 @@ function MapHeader({
 
 function RiskLegend() {
   return (
-    <div className="absolute bottom-4 left-4 z-[500] rounded-xl border border-white/10 bg-slate-950/88 p-3 shadow-2xl backdrop-blur-xl">
-      <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+    <div className="map-glass-card absolute bottom-4 left-4 z-[500] rounded-xl p-3">
+      <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#0297DE]">
         Checkpoint risk
       </p>
       <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-5">
         {(Object.keys(RISK_COLORS) as RiskLevel[]).map((level) => (
           <div key={level} className="flex items-center gap-1.5 text-[10px] text-slate-300">
             <span
-              className="size-2 rounded-full ring-2 ring-white/8"
+              className="size-2 rounded-full ring-2 ring-slate-50/15"
               style={{ backgroundColor: RISK_COLORS[level] }}
             />
             {level}
@@ -286,11 +310,11 @@ function RiskLegend() {
 function EmptyMapState() {
   return (
     <div className="pointer-events-none absolute inset-0 z-[450] grid place-items-center p-6">
-      <div className="max-w-sm rounded-2xl border border-white/10 bg-slate-950/82 p-6 text-center shadow-2xl backdrop-blur-xl">
-        <div className="mx-auto grid size-12 place-items-center rounded-2xl bg-emerald-400/10 ring-1 ring-emerald-300/20">
-          <span className="size-3 rounded-full bg-emerald-300 shadow-[0_0_0_8px_rgba(52,211,153,0.08)]" />
+      <div className="map-glass-card max-w-sm rounded-2xl p-6 text-center">
+        <div className="mx-auto grid size-12 place-items-center rounded-2xl bg-[#0297DE]/12 ring-1 ring-[#0297DE]/35">
+          <span className="size-3 rounded-full bg-[#0297DE] shadow-[0_0_0_8px_rgba(252,115,77,0.11)]" />
         </div>
-        <h3 className="mt-4 text-base font-semibold text-white">Your route intelligence map</h3>
+        <h3 className="mt-4 text-base font-semibold text-slate-50">Your route intelligence map</h3>
         <p className="mt-2 text-sm leading-6 text-slate-400">
           Enter a trip to compare three routes, inspect weather at each ETA, and identify No Travel segments before dispatch.
         </p>
@@ -319,24 +343,30 @@ function CheckpointPopup({
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#0297DE]">
             {route.name} · CP {checkpoint.sequence}
           </p>
-          <p className="mt-1 text-sm font-bold text-slate-900">
+          <p className="mt-1 text-sm font-bold text-white">
             {formatDateTime(forecast.weather.forecast_time)}
           </p>
-          <p className="mt-0.5 text-[10px] font-semibold text-slate-500">
+          <p className="mt-1 inline-flex rounded-full bg-[#FC734D]/16 px-2 py-0.5 text-[10px] font-bold text-[#FC9A7E] ring-1 ring-[#FC734D]/35">
             Selected +{forecastHour}h forecast
           </p>
         </div>
         <span
-          className="rounded-full px-2 py-1 text-[10px] font-bold text-white"
-          style={{ backgroundColor: RISK_COLORS[forecast.risk.overall] }}
+          className="rounded-full px-2 py-1 text-[10px] font-bold text-slate-50 shadow-[0_4px_14px_rgba(252,121,77,0.18)]"
+          style={{
+            backgroundColor: RISK_COLORS[forecast.risk.overall],
+            color:
+              forecast.risk.overall === "Moderate"
+                ? PALETTE.midnight
+                : PALETTE.white,
+          }}
         >
           {forecast.risk.overall}
         </span>
       </div>
-      <p className="mt-2 capitalize text-xs text-slate-500">{weatherDescription}</p>
+      <p className="mt-2 capitalize text-xs font-medium text-slate-300">{weatherDescription}</p>
       <div className="mt-3 grid grid-cols-3 gap-2">
         <PopupMetric icon={<WindIcon />} label="Wind" value={`${forecast.weather.wind_mph.toFixed(0)} mph`} />
         <PopupMetric icon={<RainIcon />} label="Rain" value={`${forecast.weather.rain_in_per_hour.toFixed(2)} in/h`} />
@@ -346,8 +376,8 @@ function CheckpointPopup({
           value={forecast.weather.temperature_f == null ? "—" : `${forecast.weather.temperature_f.toFixed(0)}°F`}
         />
       </div>
-      <div className="mt-3 border-t border-slate-200 pt-2 text-[11px] text-slate-500">
-        <span className="block">
+      <div className="mt-3 border-t border-slate-700/60 pt-2 text-[11px] text-slate-400">
+        <span className="block font-semibold text-slate-100">
           Weather forecast valid {formatDateTime(forecast.weather.forecast_time)}
         </span>
         <span className="mt-0.5 block">
@@ -368,9 +398,9 @@ function PopupMetric({
   value: string;
 }) {
   return (
-    <div className="rounded-lg bg-slate-100 p-2">
-      <div className="flex items-center gap-1 text-slate-400 [&>svg]:size-3">{icon}{label}</div>
-      <p className="mt-1 text-[11px] font-bold text-slate-800">{value}</p>
+    <div className="rounded-lg border border-[#0297DE]/45 bg-[#0297DE]/14 p-2 shadow-[inset_0_1px_rgba(255,255,255,0.04)]">
+      <div className="flex items-center gap-1 font-semibold text-[#55C7FA] [&>svg]:size-3">{icon}{label}</div>
+      <p className="mt-1 text-[11px] font-bold text-white">{value}</p>
     </div>
   );
 }

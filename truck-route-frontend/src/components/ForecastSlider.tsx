@@ -29,14 +29,14 @@ export function ForecastSlider({
   const fill = `${(value / 48) * 100}%`;
 
   return (
-    <section className="border-t border-white/8 bg-slate-950/88 px-4 py-4 backdrop-blur-xl sm:px-5">
+    <section className="forecast-dock px-4 py-4 sm:px-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
         <div className="flex min-w-0 items-center gap-3 lg:w-72">
           <button
             type="button"
             onClick={() => setPlaying((current) => !current)}
             disabled={!departureTime}
-            className="grid size-9 shrink-0 place-items-center rounded-full border border-white/10 bg-white/5 text-emerald-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+            className="grid size-9 shrink-0 place-items-center rounded-full border border-[#0297DE]/55 bg-[#0297DE]/12 text-[#0297DE] shadow-[0_0_20px_rgba(2,151,222,0.15)] transition hover:border-[#FC734D] hover:bg-[#FC734D]/12 hover:text-slate-50 focus:outline-none focus:ring-2 focus:ring-[#FC734D]/55 disabled:cursor-not-allowed disabled:opacity-40"
             aria-label={playing ? "Pause forecast animation" : "Play forecast animation"}
           >
             {playing ? (
@@ -53,7 +53,7 @@ export function ForecastSlider({
               <ClockIcon className="size-3.5" />
               Forecast corridor
             </div>
-            <p className="mt-1 truncate text-sm font-medium text-white">
+            <p className="mt-1 truncate text-sm font-medium text-slate-50">
               {selectedTime ? formatDateTime(selectedTime) : "Submit a trip to activate"}
             </p>
           </div>
@@ -85,8 +85,8 @@ export function ForecastSlider({
           </div>
         </div>
 
-        <div className="rounded-lg border border-white/8 bg-white/[0.03] px-3 py-2 text-xs text-slate-400 lg:max-w-64">
-          Showing checkpoint weather and risk at <strong className="text-slate-200">+{value}h</strong>.
+        <div className="rounded-lg border border-[#FC734D]/28 bg-[#FC734D]/8 px-3 py-2 text-xs text-slate-400 lg:max-w-64">
+          Showing checkpoint weather and risk at <strong className="text-slate-100">+{value}h</strong>.
         </div>
       </div>
     </section>

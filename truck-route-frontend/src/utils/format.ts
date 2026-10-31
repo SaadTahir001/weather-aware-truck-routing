@@ -1,22 +1,31 @@
 import type { RiskLevel } from "../types/routing";
 
+export const PALETTE = {
+  blue: "#0297DE",
+  cantaloupe: "#FC734D",
+  priority: "#FC794D",
+  midnight: "#02070A",
+  panel: "#0B1218",
+  white: "#F8FAFC",
+} as const;
+
 export const RISK_COLORS: Record<RiskLevel, string> = {
-  Low: "#24c78e",
-  Moderate: "#e8c94a",
-  High: "#f59e42",
-  Severe: "#ef5b5b",
-  "No Travel": "#a855f7",
+  Low: "#10B981",
+  Moderate: "#F59E0B",
+  High: "#FC794D",
+  Severe: "#DC2626",
+  "No Travel": "#8B5CF6",
 };
 
 export const RISK_TEXT_CLASSES: Record<RiskLevel, string> = {
-  Low: "text-emerald-300 bg-emerald-400/10 ring-emerald-300/20",
-  Moderate: "text-yellow-200 bg-yellow-400/10 ring-yellow-300/20",
-  High: "text-orange-200 bg-orange-400/10 ring-orange-300/20",
-  Severe: "text-red-200 bg-red-400/10 ring-red-300/20",
-  "No Travel": "text-purple-200 bg-purple-400/10 ring-purple-300/20",
+  Low: "text-emerald-200 bg-emerald-500/14 ring-emerald-400/35",
+  Moderate: "text-amber-200 bg-amber-500/14 ring-amber-400/35",
+  High: "text-[#FFE8E0] bg-[#FC794D]/16 ring-[#FC794D]/45",
+  Severe: "text-red-200 bg-red-600/18 ring-red-500/45",
+  "No Travel": "text-violet-200 bg-violet-500/16 ring-violet-400/45",
 };
 
-export const ROUTE_COLORS = ["#31d6a3", "#4fb8ff", "#ffb454"] as const;
+export const ROUTE_COLORS = [PALETTE.blue, "#64748B", "#334155"] as const;
 
 export function formatDuration(seconds: number): string {
   const totalMinutes = Math.round(seconds / 60);
