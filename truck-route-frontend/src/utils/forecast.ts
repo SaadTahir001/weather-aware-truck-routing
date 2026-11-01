@@ -20,7 +20,9 @@ const LOGGED_ROUTE_PAYLOADS = new WeakSet<RouteResult>();
 export function logLiveRoutePayload(route: RouteResult): void {
   if (LOGGED_ROUTE_PAYLOADS.has(route)) return;
   LOGGED_ROUTE_PAYLOADS.add(route);
-  console.log("LIVE ROUTE PAYLOAD:", route);
+  if (import.meta.env.DEV) {
+    console.log("LIVE ROUTE PAYLOAD:", route);
+  }
 }
 
 export function forecastAtHour(

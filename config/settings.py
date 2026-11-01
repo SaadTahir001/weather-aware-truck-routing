@@ -50,13 +50,17 @@ ROUTING_MOCK_MODE = os.getenv('ROUTING_MOCK_MODE', 'auto').strip().lower()
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-09br&e7n^t^jjruvb6j)#hxe#i(34i_-b9=50dy!h&=5e&tc-('
+# Production values are supplied by the hosting environment. The fallback key
+# is intentionally development-only so a fresh local checkout can still start.
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "fallback-dev-key")
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv("DEBUG", "False").lower() in ("true", "1", "t")
 
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.getenv("ALLOWED_HOSTS", "*").split(",")
+    if host.strip()
+]
 
 
 # Application definition
@@ -160,4 +164,15 @@ MAILERS = {
         'BACKEND': 'django.core.mail.backends.console.EmailBackend',
     },
 }
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        "CORS_ALLOWED_ORIGINS",
+        (
+            "https://weather-aware-truck-routing-vert.vercel.app,"
+            "http://localhost:5173,"
+            "http://127.0.0.1:5173"
+        ),
+    ).split(",")
+    if origin.strip()
+]

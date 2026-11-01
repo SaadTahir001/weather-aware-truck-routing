@@ -1,5 +1,15 @@
 # Weather-Aware Truck Routing
 
+[![Live Frontend](https://img.shields.io/badge/Live%20Frontend-Open%20HaulCast-007AFF?logo=vercel&logoColor=white)](https://weather-aware-truck-routing-vert.vercel.app/)
+[![Frontend](https://img.shields.io/badge/Frontend-Vercel-000000?logo=vercel)](https://weather-aware-truck-routing-vert.vercel.app/)
+[![Backend](https://img.shields.io/badge/Backend-Django%20on%20Render-46E3B7?logo=render&logoColor=white)](#deployment)
+
+**Live application:** [weather-aware-truck-routing-vert.vercel.app](https://weather-aware-truck-routing-vert.vercel.app/)
+
+The React frontend is deployed on Vercel and communicates over HTTPS with the
+live Django REST Framework backend hosted on Render. Production requests use
+Mapbox for geocoding and directions and OpenWeather for checkpoint forecasts.
+
 A full-stack decision-support application that compares multiple truck routes
 against ETA-specific weather forecasts, applies load-sensitive safety rules, and
 recommends the safest eligible route before considering travel time.
@@ -30,8 +40,10 @@ time-aware forecast corridor.
   metrics, and human-readable selection or rejection reasons.
 - Displays all three alternatives in Leaflet with distinct route colors,
   risk-colored checkpoint markers, weather popups, and selected-route heat halos.
-- Includes a 0–48 hour trip-corridor control that emphasizes ETA-aligned
-  checkpoint forecasts nearest the selected hour.
+- Returns a normalized `forecast_timeline` containing 49 ordered entries
+  (`hour_offset` 0 through 48) for every checkpoint.
+- Includes a 0–48 hour trip-corridor control that scrubs those checkpoint
+  timelines and reactively updates map popups and route weather cards.
 - Provides responsive loading, cancellation, validation, timeout, and API-error
   states in the React UI.
 
@@ -67,7 +79,8 @@ No Travel thresholds use a strict greater-than comparison.
 ### Load-sensitive wind rules
 
 1. Wind at or above `55 mph` is **No Travel** for every load.
-2. Wind from `45–54 mph` with a load of at least `30,000 lb` is **No Travel**.
+2. Wind from `45–54 mph` with gross vehicle weight strictly above `30,000 lb`
+   (`> 30,000 lb`) is **No Travel**.
 3. Wind from `35–44 mph` with a load above `40,000 lb` is at least **Severe**.
 
 ### Recommendation hierarchy
@@ -85,7 +98,7 @@ Input/provider order is used only when every ranking criterion is tied.
 
 | Layer | Technologies |
 | --- | --- |
-| Backend | Python, Django, Django REST Framework |
+| Backend | Python, Django, Django REST Framework, python-dotenv |
 | Routing and geocoding | Mapbox Geocoding v6 and Directions v5 |
 | Weather | OpenWeather One Call 3.0 |
 | Frontend | React, TypeScript, Vite, Axios |
@@ -96,8 +109,11 @@ Input/provider order is used only when every ranking criterion is tied.
 ## Repository Structure
 
 ```text
-outputs/
+./
 ├── README.md                    # Full-stack documentation
+├── config/                      # Django project settings and root URLs
+├── manage.py                    # Django management entry point
+├── requirements.txt             # Backend dependencies
 ├── routing/                     # Reusable Django application
 │   ├── models.py                # Route and Checkpoint models
 │   ├── services.py              # Risk thresholds and recommendation engine
@@ -129,11 +145,7 @@ outputs/
 
 ### 1. Configure and run the Django backend
 
-The `routing` directory is a reusable Django app. If a project-level
-`manage.py` already exists, place `routing` beside it and skip the
-`django-admin startproject` command below.
-
-From the `outputs` directory:
+From the repository root:
 
 ```shell
 python -m venv .venv
@@ -153,54 +165,18 @@ Install the backend dependencies:
 
 ```shell
 python -m pip install --upgrade pip
-python -m pip install Django djangorestframework django-environ django-cors-headers
+python -m pip install -r requirements.txt
 ```
 
-If needed, create the small project-level Django shell around the existing app:
-
-```shell
-django-admin startproject config .
-```
-
-Add the applications and local frontend origin to `config/settings.py` after
-the default `INSTALLED_APPS` and `MIDDLEWARE` declarations:
-
-```python
-import environ
-
-env = environ.Env()
-environ.Env.read_env(BASE_DIR / ".env")
-
-INSTALLED_APPS += [
-    "corsheaders",
-    "rest_framework",
-    "routing",
-]
-
-# Keep CorsMiddleware before CommonMiddleware.
-MIDDLEWARE.insert(0, "corsheaders.middleware.CorsMiddleware")
-
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-]
-```
-
-Include the routing API from the project URL configuration:
-
-```python
-# config/urls.py
-from django.contrib import admin
-from django.urls import include, path
-
-urlpatterns = [
-    path("admin/", admin.site.urls),
-    path("", include("routing.urls")),
-]
-```
-
-Create `.env` beside `manage.py`:
+Configuration is managed with `python-dotenv`. Create `.env` beside `manage.py`;
+`config/settings.py` loads it automatically without overriding variables already
+provided by the operating system or deployment platform:
 
 ```dotenv
+DJANGO_SECRET_KEY=local-development-key
+DEBUG=True
+ALLOWED_HOSTS=localhost,127.0.0.1
+CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 MAPBOX_ACCESS_TOKEN=your-mapbox-access-token
 OPENWEATHER_API_KEY=your-openweather-api-key
 
@@ -261,6 +237,10 @@ Open `http://localhost:5173`.
 
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
+| `DJANGO_SECRET_KEY` | Production | Development fallback | Django signing secret; use a long random value in production. |
+| `DEBUG` | No | `False` | Enables Django debug mode when set to `true`, `1`, or `t`. |
+| `ALLOWED_HOSTS` | Production | `*` | Comma-separated hostnames accepted by Django. |
+| `CORS_ALLOWED_ORIGINS` | Production | Vercel and local origins | Comma-separated browser origins allowed to call the API. |
 | `MAPBOX_ACCESS_TOKEN` | For live mode | — | Mapbox geocoding and route generation credential. |
 | `MAPBOX_API_KEY` | No | — | Accepted alias for `MAPBOX_ACCESS_TOKEN`. |
 | `OPENWEATHER_API_KEY` | For live mode | — | OpenWeather One Call hourly forecast credential. |
@@ -283,6 +263,34 @@ Open `http://localhost:5173`.
 
 Only variables prefixed with `VITE_` are exposed to browser code. Never place
 Mapbox server credentials or the OpenWeather API key in the frontend environment.
+
+## Deployment
+
+The production frontend is hosted on Vercel and the Django API is hosted on
+Render at `https://weather-routing-backend.onrender.com`. The calculation route
+is a POST-only endpoint at `/api/routes/calculate/`.
+
+Configure these environment variables on **Render**:
+
+```dotenv
+DJANGO_SECRET_KEY=generate-a-long-random-production-secret
+DEBUG=False
+MAPBOX_ACCESS_TOKEN=your-live-mapbox-access-token
+OPENWEATHER_API_KEY=your-live-openweather-api-key
+ALLOWED_HOSTS=weather-routing-backend.onrender.com
+CORS_ALLOWED_ORIGINS=https://weather-aware-truck-routing-vert.vercel.app
+ROUTING_MOCK_MODE=never
+```
+
+Configure the public backend origin on **Vercel** before building the frontend:
+
+```dotenv
+VITE_API_BASE_URL=https://weather-routing-backend.onrender.com
+```
+
+Provider credentials remain server-side on Render. They must never be placed in
+Vercel variables prefixed with `VITE_`, because those values are included in the
+browser bundle.
 
 ### Local mock mode
 
@@ -343,12 +351,11 @@ The frontend production bundle is written to `truck-route-frontend/dist/`.
 
 ## Forecast Slider Semantics
 
-The backend currently returns the forecast selected for each checkpoint's own
-ETA. It does not return a separate 49-hour forecast series for every checkpoint.
-The 0–48 hour frontend control therefore emphasizes the ETA-aligned checkpoint
-readings nearest the selected trip hour; it does not fabricate unavailable
-weather measurements.
+Every checkpoint includes `forecast_timeline`, a normalized array of exactly 49
+ordered entries with integer `hour_offset` values from 0 through 48. Each entry
+contains the weather reading and recalculated risk for that forecast hour.
 
-For a true fixed-location hourly animation, extend the checkpoint response with
-an `hourly_forecasts` array and select the matching forecast in the map component.
-Weather-provider credentials should remain server-side.
+The frontend slider selects the requested `hour_offset` from these pre-fetched
+timelines. Weather cards, checkpoint markers, risk heat halos, timestamps, and
+open Leaflet popup contents update reactively as the slider moves. Live provider
+responses and deterministic development responses use the same timeline shape.
